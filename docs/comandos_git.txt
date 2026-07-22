@@ -1,0 +1,145 @@
+╔══════════════════════════════════════════════════════════════╗
+║  COMANDOS GIT — Subir y actualizar el repositorio          ║
+║  Repo: https://github.com/ACTECNICAL66/Neun-robot-cuadrupedo- ║
+╚══════════════════════════════════════════════════════════════╝
+
+====================================================================
+1. PRIMERA VEZ — Subir todo el proyecto
+====================================================================
+
+Parate en la carpeta del proyecto (Araña/):
+
+    cd C:\Users\eddie\Desktop\AC\Araña
+
+Inicializá git (solo la primera vez):
+
+    git init
+
+Vinculá con tu repositorio de GitHub (solo la primera vez):
+
+    git remote add origin https://github.com/ACTECNICAL66/Neun-robot-cuadrupedo-.git
+
+Agregá todos los archivos:
+
+    git add .
+
+Hacé el primer commit:
+
+    git commit -m "Primer commit: Control Center v2.6 + estructura del proyecto"
+
+Subilo a GitHub (la primera vez necesita -u para vincular ramas):
+
+    git push -u origin main
+
+⚠ Si tu rama se llama "master" en vez de "main", usá:
+
+    git push -u origin master
+
+====================================================================
+2. ACTUALIZAR — Después de hacer cambios
+====================================================================
+
+Cuando modifiques archivos y quieras subir los cambios:
+
+Paso 1 — Ver qué cambió:
+
+    git status
+
+Paso 2 — Ver los cambios en detalle:
+
+    git diff
+
+Paso 3 — Agregar los archivos modificados:
+
+    git add .
+    (el punto agrega todo; podés reemplazar . por un archivo específico)
+
+Paso 4 — Crear el commit con un mensaje descriptivo:
+
+    git commit -m "Descripción corta de lo que cambiaste"
+    Ejemplos:
+    git commit -m "Agrega control de servos individuales"
+    git commit -m "Corrige bug en simulador de sensores"
+    git commit -m "Actualiza interfaz LED matrix editor"
+
+Paso 5 — Subir a GitHub:
+
+    git push
+
+(Eso ya funciona porque la primera vez vinculaste con -u)
+
+====================================================================
+3. COMANDOS ÚTILES DEL DÍA A DÍA
+====================================================================
+
+Ver el historial de commits:
+
+    git log --oneline
+
+Ver el historial con gráfico de ramas:
+
+    git log --oneline --graph --all
+
+Ver qué archivos están modificados sin commit:
+
+    git status
+
+Ver cambios de una versión a otra:
+
+    git diff
+
+Descargar cambios de GitHub (si alguien más subió algo):
+
+    git pull
+
+Deshacer cambios de un archivo (volver a como estaba en el último commit):
+
+    git checkout -- nombre_del_archivo
+
+====================================================================
+4. ERRORES COMUNES Y SOLUCIONES
+====================================================================
+
+ERROR: "fatal: No configured push destination"
+→ No vinculaste el remote. Corregí con:
+    git remote add origin https://github.com/ACTECNICAL66/Neun-robot-cuadrupedo-.git
+    git push -u origin main
+
+ERROR: "fatal: refusing to merge unrelated histories"
+→ El repo de GitHub tiene archivos que no están en tu PC. Forzá el primer push:
+    git push -u origin main --force
+  (esto SOLO la primera vez, después NO)
+
+ERROR: "error: failed to push some refs"
+→ Alguien subió cambios mientras trabajabas. Bajalos primero:
+    git pull
+    (resolvé conflictos si hay)
+    git push
+
+ERROR: "Please tell me who you are"
+→ Git necesita tu identidad para el commit. Configuralo:
+    git config --global user.email "tu-email@ejemplo.com"
+    git config --global user.name "Tu Nombre"
+
+ERROR: "Permission denied (publickey)"
+→ Estás tratando de usar SSH en vez de HTTPS. Usá HTTPS o configurá SSH.
+  Solución rápida: usá HTTPS con:
+    git remote set-url origin https://github.com/ACTECNICAL66/Neun-robot-cuadrupedo-.git
+
+====================================================================
+5. FLUJO COMPLETO TÍPICO (resumen)
+====================================================================
+
+Primera vez:
+  git init
+  git remote add origin https://github.com/ACTECNICAL66/Neun-robot-cuadrupedo-.git
+  git add .
+  git commit -m "Primer commit"
+  git push -u origin main
+
+Después de cada cambio:
+  git status               ← ver qué cambió
+  git add .                ← preparar todo
+  git commit -m "mensaje"  ← guardar cambios
+  git push                 ← subir a GitHub
+====================================================================

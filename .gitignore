@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Entorno virtual
+venv/
+.env/
+
+# Windows
+Thumbs.db
+*.bak
+
+# IDE
+.vscode/
+.idea/
+
+# Proyecto
+pc/*.pyc

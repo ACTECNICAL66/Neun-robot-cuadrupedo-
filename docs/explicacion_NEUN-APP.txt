@@ -1,0 +1,691 @@
+╔══════════════════════════════════════════════════════════════╗
+║  EXPLICACIÓN COMPLETA DE NEUN-APP.py — ARAÑA ROBOT v2.6   ║
+║  Para principiantes: qué hace cada parte del código Python ║
+╚══════════════════════════════════════════════════════════════╝
+
+====================================================================
+INTRODUCCIÓN: ¿QUÉ ES ESTE PROGRAMA?
+====================================================================
+
+NEUN-APP.py es el "cerebro" de un robot araña. Corre en una PC y
+tiene 3 trabajos principales:
+
+  1. Servir una PÁGINA WEB (interfaz gráfica) para controlar el robot
+  2. Conectarse por WiFi al ESP32-S3 (el microcontrolador del robot)
+  3. SIMULAR datos cuando el robot real no está conectado
+
+La comunicación es así:
+
+  [TU PC - Flask]  <---WiFi--->  [ESP32-S3 del robot]
+       |                               |
+  localhost:5000                   192.168.4.1
+  (面板 web táctil)          (datos reales de sensores)
+
+Si el ESP32 no responde → el programa inventa datos (MODO DEMO).
+Si el ESP32 responde   → usa datos reales (MODO REAL).
+
+
+====================================================================
+PARTE 1: ENCABEZADO (líneas 1-21)
+====================================================================
+
+  #!/usr/bin/env python3
+  # -*- coding: utf-8 -*-
+
+  - #! ... :  Le dice a Linux/Mac "ejecuta esto con Python 3"
+  - coding: utf-8 :  Permite usar tildes, ñ, etc.
+
+  El texto entre """...""" es un comentario largo que explica qué
+  hace el programa y cómo se conecta con el ESP32.
+
+  Símil:  Es como la portada de un libro, dice el título, versión
+          y de qué trata.
+
+
+====================================================================
+PARTE 2: IMPORTACIONES (líneas 23-35)
+====================================================================
+
+  import json         ->  Para trabajar con datos en formato JSON
+  import math         ->  Operaciones matemáticas (no se usa mucho aquí)
+  import random       ->  Para generar números al azar (simular sensores)
+  import time         ->  Para pausas, medir tiempos, timestamps
+  import threading    ->  Para ejecutar cosas "en paralelo" (hilos)
+  from dataclasses import dataclass, field
+                      ->  "Clases de datos" (como formularios con campos)
+  from typing import Any, Optional
+                      ->  Para decir "esto puede ser cualquier cosa"
+
+  import requests     ->  Para hablar con el ESP32 por HTTP (como un navegador)
+  from flask import Flask, jsonify, render_template, request
+                      ->  Flask: crea un servidor web liviano
+  from flask_cors import CORS
+                      ->  Permite que la página web funcione correctamente
+
+  Símil:  Es como preparar las herramientas antes de empezar a
+          construir algo. Cada "import" trae una herramienta nueva.
+
+
+====================================================================
+PARTE 3: CONFIGURACIÓN (líneas 37-60)
+====================================================================
+
+  @dataclass
+  class Config:
+      esp32_ip: str = "192.168.4.1"
+      esp32_port: int = 80
+      ...
+
+  Una @dataclass es UNA CLASE SIMPLE que solo guarda datos. Es como
+  un formulario con campos y valores por defecto.
+
+  ¿Por qué usar una clase para la configuración?
+  - Todos los valores están en un solo lugar
+  - Fáciles de cambiar
+  - Si necesitas cambiar la IP del ESP32, solo cambias esta línea
+
+  @property
+  def esp32_base_url(self) -> str:
+      return f"http://{self.esp32_ip}:{self.esp32_port}"
+
+  @property crea un "método que parece una variable". Cuando escribes
+  config.esp32_base_url, calcula la URL automáticamente:
+  -> "http://192.168.4.1:80"
+
+  Valores importantes:
+  - poll_interval_ms = 500:  El frontend web pregunta cada 0.5 segundos
+  - connection_timeout = 1.0:  Espera 1 segundo a que el ESP32 responda
+  - max_logs = 100:  Solo guarda los últimos 100 mensajes de log
+  - max_backoff = 30:  Si el ESP32 no responde, espera hasta 30 segundos
+
+  Símil:  Es como la caja de herramientas con las instrucciones de
+          "cada cuánto hacer cada cosa".
+
+
+====================================================================
+PARTE 4: ESTADO DE SENSORES (SensorState, líneas 62-97)
+====================================================================
+
+  @dataclass
+  class SensorState:
+      ultrasonic: dict = field(default_factory=lambda: {...})
+      imu: dict = field(default_factory=lambda: {...})
+      ir: dict = field(...)
+      dht: dict = field(...)
+      leds: dict = field(...)
+      servos: dict = field(...)
+
+  Aquí se define el estado de CADA SENSOR del robot. Cada sensor es
+  un diccionario (dict), que es como una "caja con etiquetas".
+
+  Ejemplo del sensor ultrasónico (radar de distancia):
+  {
+      "online": True,      ->  ¿Está funcionando?
+      "value": 42.5,       ->  Distancia medida: 42.5 cm
+      "unit": "cm",        ->  Unidad: centímetros
+      "name": "Radar HC-SR04",  ->  Nombre para mostrar
+      "pin": "GPIO10/11"   ->  Pines físicos donde se conecta
+  }
+
+  Sensor IMU (MPU6050): mide inclinación (pitch, roll, yaw),
+  aceleración (ax, ay, az), y velocidad angular (gx, gy, gz).
+
+  Sensor DHT22: temperatura y humedad del ambiente.
+
+  ¿Por qué field(default_factory=lambda: {...})?
+  - Si usáramos {} directamente, TODAS las instancias compartirían
+    el mismo diccionario (un bug común en Python).
+  - default_factory=lambda: {...} crea un diccionario NUEVO cada vez.
+
+  to_dict() junta todos los sensores en un solo diccionario grande
+  para enviarlo como JSON.
+
+  Símil:  Es como el panel de instrumentos de un auto: cada sensor
+          es un indicador (velocidad, temperatura, etc.).
+
+
+====================================================================
+PARTE 5: ENTRADAS DE LOG, CHAT Y FALLAS (líneas 100-118)
+====================================================================
+
+  @dataclass
+  class LogEntry:
+      time: str    ->  "14:35:22" (hora del evento)
+      msg: str     ->  "Modo: Caminar"
+      type: str    ->  "info", "success", "error", "warn"
+
+  @dataclass
+  class ChatEntry:
+      role: str    ->  "user" (el usuario) o "ai" (el asistente)
+      text: str    ->  El mensaje
+      time: str    ->  Hora
+
+  @dataclass
+  class FaultEntry:
+      time: str    ->  Hora de la falla
+      sensor: str  ->  "ultrasonic", "ir", etc.
+      msg: str     ->  "Radar HC-SR04 desconectado"
+
+  Son simplemente "fichas" que guardan un evento ocurrido. Se usan
+  para mostrar el historial en la interfaz web.
+
+  Símil:  LogEntry es como un diario de a bordo del robot.
+          ChatEntry es como el historial de WhatsApp con el robot.
+          FaultEntry es como el libro de reclamos de sensores rotos.
+
+
+====================================================================
+PARTE 6: SpiderState — EL ESTADO COMPLETO DEL ROBOT (líneas 121-186)
+====================================================================
+
+  class SpiderState:
+      def __init__(self):
+          self.connected = False     # ¿Conectado al ESP32?
+          self.mode = "STAND"        # Modo actual (Stand, Caminar, etc.)
+          self.speed = 50            # Velocidad 0-100%
+          self.emergency_stop = False # ¿Parada de emergencia activada?
+          self.stabilize = False     # ¿Auto-estabilización activada?
+          self.esp32_ip = "192.168.4.1"
+          self.last_esp32_ping = 0   # Última vez que respondió
+          self.battery = 87.0        # Batería al 87%
+
+          self.sensors = SensorState()  # Todos los sensores
+
+          self.servos = [[90, 90, 90] for _ in range(4)]
+          # 4 patas, cada una con 3 articulaciones (ángulo 0-180)
+          # Inicial: todo en 90° (posición neutra)
+
+          self.led_color = {"r": 0, "g": 255, "b": 136}
+          self.led_matrix = [[0]*8 for _ in range(8)]
+          # Matriz de LEDs 8x8 toda apagada
+
+          self._logs = []       # Lista vacía para logs
+          self._chat_history = []  # Lista vacía para chat
+          self._faults = []     # Lista vacía para fallas
+
+  Esta NO es una dataclass, es una clase NORMAL, porque tiene lógica
+  y métodos (acciones), no solo datos.
+
+  Métodos importantes:
+
+  def log(self, msg, type="info"):
+      self._logs.insert(0, ...)  ->  Agrega al PRINCIPIO de la lista
+      if len(self._logs) > max: pop()  ->  Si hay más de 100, borra el último
+
+  Esto hace que los mensajes más nuevos aparezcan primeros en la UI.
+
+  @property
+  def logs(self) -> list[dict]:
+      return [{"time":..., "msg":..., "type":...} for e in self._logs]
+
+  Convierte los objetos LogEntry a diccionarios para enviarlos como JSON.
+
+  def status_snapshot(self) -> dict:
+  Este método es CLAVE: compila TODO el estado del robot en un solo
+  diccionario y lo devuelve. El frontend lo pide cada 0.5 segundos.
+
+  Símil:  SpiderState es como el "cerebro" del programa. Todo lo que
+          el robot "sabe" está guardado aquí. Es la única fuente de
+          verdad (single source of truth).
+
+
+====================================================================
+PARTE 7: SensorSimulator — MODO DEMO (líneas 192-231)
+====================================================================
+
+  class SensorSimulator:
+      def __init__(self, state):
+          self._state = state   # Guarda referencia al estado global
+
+      def update(self):
+          if self._state.connected:
+              return  # Si hay ESP32 real, NO simular
+
+  Lógica: cada 0.4 segundos (desde el hilo), este método se ejecuta.
+  Si el ESP32 real está conectado, no hace NADA. Si no, inventa datos.
+
+  Cómo simula cada sensor:
+
+  * ULTRASONIDO (distancia):
+    Valor actual + un número al azar entre -8 y +8
+    Ej: si estaba en 42.5cm, puede ir a 35.2cm o 49.8cm
+    Luego lo limita entre 5 y 400 (rango real del sensor)
+
+  * IR (infrarrojo):
+    Valor actual + un entero al azar entre -60 y +60
+    Limitado entre 0 y 1023
+
+  * DHT22 (temperatura y humedad):
+    Temperatura: ±0.3°C (limitado 15-40°C)
+    Humedad: ±1.5% (limitado 20-90%)
+
+  * IMU (acelerómetro/giroscopio):
+    Pitch y roll: ±3° (limitado ±45°)
+    Yaw: gira 0-360° continuamente
+    Giroscopio: ruido aleatorio ±200
+
+  * BATERÍA:
+    Disminuye 0.02% cada ciclo (simula descarga lenta)
+
+  * FALLAS ALEATORIAS:
+    0.5% de probabilidad por ciclo → un sensor se desconecta
+    0.8% de probabilidad por ciclo → un sensor desconectado se reconecta
+
+  Estas probabilidades hacen que las fallas sean IMPREVISIBLES pero
+  no demasiado frecuentes. Es realista.
+
+  Símil:  SensorSimulator es como un simulador de vuelo: cuando no
+          tienes el avión real, el programa te muestra datos
+          inventados pero creíbles.
+
+
+====================================================================
+PARTE 8: ESP32Client — COMUNICACIÓN CON EL ROBOT REAL (líneas 237-295)
+====================================================================
+
+  class ESP32Client:
+      def __init__(self, state):
+          self._state = state
+
+  CLIENTE HTTP que habla con el ESP32. HTTP es el mismo protocolo que
+  usan los navegadores web. El ESP32 tiene un pequeño servidor web.
+
+  def ping(self) -> bool:
+      try:
+          resp = requests.get("http://192.168.4.1/api/status",
+                              timeout=0.8)
+          return resp.status_code == 200
+      except:
+          return False
+
+  ping() es una "prueba de vida". Le pega al ESP32 y pregunta "¿estás
+  ahí?". Si responde OK (código 200), devuelve True.
+  Si no responde en 0.8 segundos, devuelve False.
+  El try/except captura CUALQUIER error (timeout, conexión rechazada,
+  etc.) y devuelve False.
+
+  def fetch_status(self) -> bool:
+  Como ping() pero más completo: trae TODOS los datos del ESP32.
+  Si recibe sensores, batería, servos, modo, velocidad → los guarda.
+
+  def _merge_sensors(self, esp_sensors):
+  Toma los datos del ESP32 y los COPIA al estado local, campo por campo.
+
+  def send_command(self, cmd, value=None) -> bool:
+  Envía un comando al ESP32 vía POST. Por ejemplo:
+    POST {"cmd": "mode", "value": "Caminar"} a /api/command
+  Solo envía si estamos conectados.
+
+  Símil:  ESP32Client es como un intérprete de idiomas: traduce las
+          órdenes de la PC a peticiones HTTP que el ESP32 entiende.
+
+
+====================================================================
+PARTE 9: HILOS (THREADS) — COSAS EN PARALELO (líneas 301-338)
+====================================================================
+
+  def _sensor_loop():
+      while True:              # Bucle INFINITO
+          simulator.update()    # Actualiza sensores simulados
+          time.sleep(0.4)       # Espera 0.4 segundos
+
+  threading.Thread(target=_sensor_loop, daemon=True).start()
+
+  Un HILO (thread) es como tener UN TRABAJADOR EXTRA que hace una
+  tarea mientras el programa principal sigue haciendo otra cosa.
+
+  El sensor loop es un bucle que NUNCA TERMINA (while True). Cada
+  0.4 segundos actualiza los sensores. Sin hilos, esto BLOQUEARÍA
+  el programa y Flask no podría responder peticiones web.
+
+  daemon=True significa: "si el programa principal termina, mátame
+  también". Así no quedan procesos zombies.
+
+  def _connection_monitor():
+      attempts = 0
+      while True:
+          if esp32.ping():        # ¿El ESP32 responde?
+              esp32.fetch_status()  # Trae datos
+              attempts = 0          # Resetea contador
+              time.sleep(2)
+          else:
+              attempts += 1
+              espera = min(2 * (2 ** (attempts // 10)), 30)
+              time.sleep(espera)
+
+  BACKOFF EXPONENCIAL:
+  - Intento 1-10:  espera 2 segundos
+  - Intento 11-20: espera 4 segundos (2^1)
+  - Intento 21-30: espera 8 segundos (2^2)
+  - ...hasta máximo 30 segundos
+
+  ¿Por qué? Para no saturar la red cuando el ESP32 está apagado.
+  Cuando vuelve a responder, se resetea a 2 segundos.
+
+  Este hilo NO arranca solo. Arranca cuando el usuario hace clic
+  en "Conectar" desde la interfaz web.
+
+  Símil:  Los hilos son como tener ayudantes:
+          - Hilo 1: Actualiza sensores cada 0.4s
+          - Hilo 2: Vigila la conexión con el ESP32
+          - Hilo principal (Flask): Atiende la página web
+
+
+====================================================================
+PARTE 10: CommandDispatcher — EL ENRUTADOR DE ÓRDENES (líneas 344-416)
+====================================================================
+
+  class CommandDispatcher:
+      def __init__(self, state, esp32):
+          self._handlers = {
+              "mode":      self._handle_mode,
+              "move":      self._handle_move,
+              "aux":       self._handle_aux,
+              "speed":     self._handle_speed,
+              "emergency": self._handle_emergency,
+              "stabilize": self._handle_stabilize,
+              "servo":     self._handle_servo,
+              "servo_adv": self._handle_servo_adv,
+              "terminal":  self._handle_terminal,
+          }
+
+  Es un DICCIONARIO que mapea NOMBRES DE COMANDO a FUNCIONES.
+  Cuando llega un comando "mode", busca la función _handle_mode
+  y la ejecuta.
+
+  def dispatch(self, cmd, value=None):
+      # 1. Si hay ESP32, reenviar el comando al robot real
+      if self._state.connected and cmd != "terminal":
+          self._esp32.send_command(cmd, value)
+
+      # 2. Ejecutar handler local SIEMPRE
+      handler = self._handlers.get(cmd)
+      if handler:
+          handler(value)
+
+      return {"status": "ok", "esp32_forwarded": True/False}
+
+  PRIMERO reenvía al ESP32 (si está conectado), LUEGO ejecuta el
+  handler local. El handler local actualiza el estado para que la
+  UI se entere del cambio.
+
+  Handlers específicos:
+
+  _handle_mode(value):
+      state.mode = value   ("Stand", "Caminar", "Trotar"...)
+
+  _handle_move(value):
+      Solo loguea el movimiento
+
+  _handle_speed(value):
+      state.speed = int(value)
+
+  _handle_emergency(value):
+      state.emergency_stop = True/False
+      Loguea en rojo si es emergencia
+
+  _handle_servo(value):
+      Espera un dict: {"leg": 0, "joint": 1, "angle": 90}
+      state.servos[leg][joint] = angle
+
+  _handle_servo_adv(value):
+      Espera un dict: {"channel": 5, "angle": 90}
+      channel // 3 = pata, channel % 3 = articulación
+      Ej: canal 5 -> pata 1, articulación 2
+
+  Símil:  Es como un CENTRAL TELEFÓNICO: recibe una llamada (comando)
+          y la redirige al departamento correcto (handler).
+
+
+====================================================================
+PARTE 11: CHAT COPILOTO (líneas 422-461)
+====================================================================
+
+  _CHAT_RESPONSES = {
+      "hola": "¡Hola! Soy el asistente de la Araña Robot...",
+      "modo": "Los modos disponibles son: Stand, Caminar...",
+      "sensor": "Todos los sensores están online...",
+      "bateria": None,    # Se resuelve dinámicamente
+      "calibrar": "Usa el comando 'calibrate' en la terminal.",
+      "parar": "Deteniendo movimiento...",
+      "stop": "Deteniendo movimiento...",
+      "emergency": "Activando Emergency Stop...",
+      "velocidad": None,  # Se resuelve dinámicamente
+  }
+
+  def process_chat_message(msg):
+      state.add_chat("user", msg)  # Guarda mensaje del usuario
+
+      for keyword, response in _CHAT_RESPONSES.items():
+          if keyword in msg.lower():
+              # Si la palabra clave está en el mensaje...
+
+              if keyword == "bateria":
+                  resp = f"La batería está en {state.battery:.0f}%."
+              elif keyword == "velocidad":
+                  resp = f"La velocidad actual es {state.speed}%."
+              elif keyword in ("parar", "stop"):
+                  resp = response
+                  state.log("Stop por chat", "warn")
+              elif keyword == "emergency":
+                  resp = response
+                  state.emergency_stop = True
+              else:
+                  resp = response
+
+              state.add_chat("ai", resp)
+              return resp
+
+      # Si ninguna palabra clave coincide:
+      resp = "Puedes preguntarme sobre modos, sensores..."
+      state.add_chat("ai", resp)
+      return resp
+
+  NO usa inteligencia artificial real. Es un simple "match por
+  palabra clave". Si el usuario escribe "dame la batería", contiene
+  "bateria" → responde con el nivel actual.
+
+  Algunos comandos además de responder, EJECUTAN ACCIONES:
+  - "parar" / "stop": registra una parada en los logs
+  - "emergency": activa la parada de emergencia real
+
+  Símil:  Es como un contestador automático que reconoce palabras
+          clave y responde algo pre-escrito.
+
+
+====================================================================
+PARTE 12: SERVIDOR FLASK — API REST (líneas 468-522)
+====================================================================
+
+  app = Flask(__name__)   # Crea la aplicación web
+  CORS(app)               # Permite peticiones desde cualquier lado
+
+  Flask es un micro-framework para crear servidores web. Cuando el
+  navegador abre http://localhost:5000, Flask recibe la petición.
+
+  @app.route("/")
+  def index():
+      return render_template("index.html")
+
+  El "@" es un DECORADOR. Asocia una URL con una función.
+  Cuando alguien visita "/", Flask ejecuta index() y devuelve la
+  página principal.
+
+  Endpoints de la API:
+
+  1. GET /api/status
+     -> Devuelve TODO el estado del robot (sensors, battery, mode...)
+     -> El frontend lo llama cada 500ms para actualizar la pantalla
+
+  2. GET /api/esp32_status
+     -> Solo conexión: {"connected": True, "esp32_ip": "...", ...}
+     -> Para el indicador LED de conexión en la UI
+
+  3. GET /api/connect_esp32
+     -> Arranca el monitor de conexión
+     -> Hace ping + fetch_status
+     -> Si funciona: {"success": True, "message": "Conectado"}
+     -> Si no:      {"success": False, "message": "No responde"}
+
+  4. GET /api/disconnect
+     -> Simplemente marca connected = False
+
+  5. POST /api/command
+     -> Recibe: {"cmd": "mode", "value": "Caminar"}
+     -> Lo manda al CommandDispatcher
+     -> Devuelve: {"status": "ok", "esp32_forwarded": True}
+
+  6. POST /api/chat
+     -> Recibe: {"message": "hola"}
+     -> Procesa con process_chat_message()
+     -> Devuelve: {"response": "¡Hola!..."}
+
+  Símil:  Flask es como un RESTAURANTE:
+          - El menú son las rutas (/api/status, /api/command...)
+          - Los mozos son Flask que llevan las peticiones
+          - La cocina es la lógica que procesa cada pedido
+          - La respuesta JSON es el plato terminado
+
+
+====================================================================
+PARTE 13: MAIN — PUNTO DE ENTRADA (líneas 528-538)
+====================================================================
+
+  if __name__ == "__main__":
+      print("=" * 65)
+      print("  ARAÑA ROBOT v2.6 - Control Center Desktop + ESP32 Bridge")
+      print("=" * 65)
+      print(f"  IP del ESP32 configurada: {config.esp32_ip}")
+      print("  Para conectar:")
+      print("    1. Conecta la PC a la red WiFi 'ARANA-ROBOT'")
+      print("    2. Abre el navegador en: http://localhost:5000")
+      print("    3. Haz clic en 'Conectar' en el diálogo emergente")
+      print("=" * 65)
+      app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+
+  if __name__ == "__main__":
+
+  Esto significa: "SOLO ejecuta esto si CORRES ESTE ARCHIVO, no si
+  lo importas desde otro lado". Es el punto de entrada del programa.
+
+  app.run():
+  - host="0.0.0.0":  Escucha en TODAS las interfaces de red (WiFi,
+    ethernet, localhost). Así otros dispositivos pueden acceder.
+  - port=5000:       Puerto estándar para desarrollo Flask
+  - debug=False:     Desactiva el modo debug (recarga automática)
+  - threaded=True:   Un hilo por petición (varios usuarios a la vez)
+
+  NOTA: El sensor loop arranca ANTES del main (línea 338), porque
+  está fuera del if __name__. Así la simulación ya está corriendo
+  cuando Flask empieza.
+
+
+====================================================================
+DIAGRAMA DE FLUJO COMPLETO
+====================================================================
+
+  INICIO
+    │
+    ▼
+  Arranca _sensor_loop (hilo que simula sensores cada 0.4s)
+    │
+    ▼
+  Arranca Flask en puerto 5000
+    │
+    ▼
+  Usuario abre navegador en http://localhost:5000
+    │
+    ▼
+  Usuario ve la interfaz web (index.html)
+    │
+    ├── (opcional) Hace clic en "Conectar"
+    │       │
+    │       ▼
+    │   Arranca _connection_monitor (hilo)
+    │       │
+    │       ▼
+    │   ¿ESP32 responde en 192.168.4.1?
+    │       │            │
+    │      SÍ            NO
+    │       │            │
+    │       ▼            ▼
+    │   MODO REAL     MODO DEMO
+    │   (usa datos    (simulador genera
+    │    del ESP32)    datos falsos)
+    │
+    ├── (cada 0.5s) Frontend llama a GET /api/status
+    │       │
+    │       ▼
+    │   Recibe JSON con sensores, batería, servos, modo...
+    │
+    ├── Usuario da un comando (botón "Caminar")
+    │       │
+    │       ▼
+    │   POST /api/command {"cmd": "mode", "value": "Caminar"}
+    │       │
+    │       ▼
+    │   CommandDispatcher:
+    │     1. Reenvía al ESP32 (si conectado)
+    │     2. Ejecuta handler local
+    │     3. Actualiza estado
+    │
+    └── Usuario escribe en el chat
+            │
+            ▼
+        POST /api/chat {"message": "hola"}
+            │
+            ▼
+        process_chat_message()
+            │
+            ▼
+        Busca palabra clave en diccionario
+            │
+            ▼
+        Responde con texto predefinido
+
+
+====================================================================
+CONCEPTOS CLAVE PARA PRINCIPIANTES
+====================================================================
+
+  1. ¿Qué es un DICCIONARIO (dict)?
+     Es como una caja con etiquetas. En vez de números (como las
+     listas), usa palabras clave para guardar cosas:
+       persona = {"nombre": "Juan", "edad": 25}
+       print(persona["nombre"])  → "Juan"
+
+  2. ¿Qué es @dataclass?
+     Una forma de crear clases que solo guardan datos, sin escribir
+     todo el código repetitivo. Python lo genera automáticamente.
+
+  3. ¿Qué es un HILO (thread)?
+     Un programa normalmente hace una cosa a la vez. Los hilos
+     permiten hacer VARIAS COSAS "AL MISMO TIEMPO".
+     Ej: mientras Flask atiende la web, otro hilo actualiza sensores.
+
+  4. ¿Qué es JSON?
+     Un formato de texto para intercambiar datos. Es como un
+     diccionario de Python pero en texto. Se usa para comunicar
+     el frontend (JavaScript) con el backend (Python/Flask).
+
+  5. ¿Qué es una API REST?
+     Una forma de comunicación donde:
+     - GET = "dame datos"
+     - POST = "toma esto y haz algo"
+     Las respuestas son en JSON.
+
+  6. ¿Qué es try/except?
+     "Intenta hacer esto, y si falla, haz esto otro".
+     Evita que el programa se rompa cuando algo sale mal.
+
+  7. ¿Qué es un @property?
+     Un método que se llama como si fuera una variable.
+     En vez de config.esp32_base_url(), escribes config.esp32_base_url.
+
+  8. ¿Qué significa if __name__ == "__main__"?
+     "Solo ejecuta esto si corres este archivo directamente".
+     Si importas el archivo desde otro lado, no se ejecuta.
+
+====================================================================
+FIN DE LA EXPLICACIÓN
+====================================================================
