@@ -37,3 +37,11 @@ pip install -r requirements.txt
 ## Modo Demo
 
 Si el ESP32 no está disponible, el sistema entra automáticamente en **Modo Demo** con sensores simulados.
+
+## Buzzer / Sonido
+
+El panel **Sonido / Buzzer** permite reproducir tonos en el módulo buzzer del ESP32:
+
+- **Patrones predefinidos**: Beep, Sirena, Alarma, Ascendente, Descendente.
+- **Regulación manual**: forma de onda, frecuencia (100–4000 Hz), duración y volumen.
+- En la PC se reproduce una vista previa del tono (Web Audio) y el comando se reenvía al ESP32 vía `{"cmd":"buzzer", "value":{...}}`. Ver `esp32/README.md` para el protocolo completo.

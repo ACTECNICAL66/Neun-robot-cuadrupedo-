@@ -85,6 +85,9 @@ class SensorState:
     servos: dict = field(default_factory=lambda: {
         "online": True, "count": 12, "name": "PCA9685", "pin": "I2C"
     })
+    buzzer: dict = field(default_factory=lambda: {
+        "online": True, "state": "idle", "name": "Buzzer Pasivo", "pin": "GPIO15"
+    })
 
     def to_dict(self) -> dict:
         return {
@@ -94,6 +97,7 @@ class SensorState:
             "dht": self.dht,
             "leds": self.leds,
             "servos": self.servos,
+            "buzzer": self.buzzer,
         }
 
 
@@ -221,7 +225,7 @@ class SensorSimulator:
             self._state.log(f"FALLA: {name} desconectado", "error")
 
         if rng.random() < 0.008:
-            for key in ("ultrasonic", "ir", "dht", "imu", "leds", "servos"):
+            for key in ("ultrasonic", "ir", "dht", "imu", "leds", "servos", "buzzer"):
                 if not getattr(s, key)["online"]:
                     getattr(s, key)["online"] = True
                     self._state.log(f"{getattr(s, key)['name']} reconectado", "success")
@@ -286,7 +290,7 @@ class ESP32Client:
 
     def _merge_sensors(self, esp_sensors: dict) -> None:
         s = self._state.sensors
-        for key in ("ultrasonic", "imu", "ir", "dht", "leds", "servos"):
+        for key in ("ultrasonic", "imu", "ir", "dht", "leds", "servos", "buzzer"):
             if key in esp_sensors:
                 for k, v in esp_sensors[key].items():
                     getattr(s, key)[k] = v
@@ -354,6 +358,8 @@ class CommandDispatcher:
             "stabilize": self._handle_stabilize,
             "servo": self._handle_servo,
             "servo_adv": self._handle_servo_adv,
+            "buzzer": self._handle_buzzer,
+            "buzzer_stop": self._handle_buzzer_stop,
             "terminal": self._handle_terminal,
         }
 
@@ -411,6 +417,33 @@ class CommandDispatcher:
 
     def _handle_terminal(self, value: Any) -> None:
         self._state.log(f"Terminal: {value}", "info")
+
+    def _handle_buzzer(self, value: Any) -> None:
+        s = self._state.sensors.buzzer
+        s["state"] = "playing"
+        duration = None
+        if isinstance(value, dict):
+            pattern = value.get("pattern", "CUSTOM")
+            freq = value.get("freq")
+            duration = value.get("duration")
+            self._state.log(
+                f"Buzzer: patrón {pattern}"
+                + (f" | {freq} Hz" if freq else "")
+                + (f" | {duration} ms" if duration else ""),
+                "success",
+            )
+        else:
+            self._state.log("Buzzer: reproduciendo tono", "info")
+
+        if duration:
+            threading.Timer(max(duration / 1000.0, 0.05), self._buzzer_timeout).start()
+
+    def _buzzer_timeout(self) -> None:
+        self._state.sensors.buzzer["state"] = "idle"
+
+    def _handle_buzzer_stop(self, value: Any = None) -> None:
+        self._state.sensors.buzzer["state"] = "idle"
+        self._state.log("Buzzer: detenido", "warn")
 
 
 dispatcher = CommandDispatcher(state, esp32)

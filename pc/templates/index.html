@@ -2255,6 +2255,10 @@ input[type=range].custom-slider::-webkit-slider-thumb:hover {
         <svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
         Terminal / IA
       </button>
+      <button class="nav-item" id="btn-nav-buzzer" onclick="switchPanel('buzzer', this)">
+        <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+        Sonido / Buzzer
+      </button>
       <button class="nav-item" id="btn-nav-sensors" onclick="switchPanel('sensors', this)">
         <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         Sensores
@@ -3039,6 +3043,84 @@ input[type=range].custom-slider::-webkit-slider-thumb:hover {
         </div>
       </div>
 
+      <!-- ================= BUZZER / SOUND PANEL ================= -->
+      <div id="panel-buzzer" class="panel">
+        <div class="content-grid">
+          <!-- Patrones de sonido -->
+          <div class="card col-6">
+            <div class="card-header"><div class="card-title"><span class="ct-icon"><svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span> Patrones de Sonido</div></div>
+            <div class="card-body">
+              <div class="modes-grid" style="grid-template-columns:repeat(2,1fr);gap:12px" id="buzzerPresetGrid"></div>
+            </div>
+          </div>
+
+          <!-- Regulación de tono -->
+          <div class="card col-6">
+            <div class="card-header"><div class="card-title"><span class="ct-icon"><svg viewBox="0 0 24 24"><path d="M18 12a6 6 0 0 1-6 6"/><path d="M6 12a12 12 0 0 1 12-12"/><path d="M6 12a12 12 0 0 0 12 12"/><circle cx="12" cy="12" r="2"/></svg></span> Regulación de Tono</div></div>
+            <div class="card-body">
+              <div class="palette-group">
+                <span class="palette-label">Tipo de Onda</span>
+                <div class="draw-tools-group" id="waveSelector">
+                  <button class="tool-btn active" data-wave="sine">Senoidal</button>
+                  <button class="tool-btn" data-wave="square">Cuadrada</button>
+                  <button class="tool-btn" data-wave="triangle">Triangular</button>
+                  <button class="tool-btn" data-wave="sawtooth">Sierra</button>
+                </div>
+              </div>
+              <div class="palette-group" style="margin-top:18px">
+                <div class="speed-indicator" style="margin-bottom:4px">
+                  <span class="palette-label">Frecuencia</span>
+                  <span class="speed-text" id="buzzerFreqVal" style="font-size:22px">880 Hz</span>
+                </div>
+                <div class="custom-slider-wrap">
+                  <input type="range" class="custom-slider" id="buzzerFreqSlider" min="100" max="5000" step="10" value="880" oninput="updateBuzzerFreq(this.value)">
+                </div>
+              </div>
+              <div class="palette-group" style="margin-top:18px">
+                <div class="speed-indicator" style="margin-bottom:4px">
+                  <span class="palette-label">Duración</span>
+                  <span class="speed-text" id="buzzerDurVal" style="font-size:22px">300 ms</span>
+                </div>
+                <div class="custom-slider-wrap">
+                  <input type="range" class="custom-slider" id="buzzerDurSlider" min="50" max="10000" step="50" value="300" oninput="updateBuzzerDuration(this.value)">
+                </div>
+              </div>
+              <div class="palette-group" style="margin-top:18px">
+                <div class="speed-indicator" style="margin-bottom:4px">
+                  <span class="palette-label">Volumen</span>
+                  <span class="speed-text" id="buzzerVolVal" style="font-size:22px">50%</span>
+                </div>
+                <div class="custom-slider-wrap">
+                  <input type="range" class="custom-slider" id="buzzerVolSlider" min="0" max="100" step="5" value="50" oninput="updateBuzzerVolume(this.value)">
+                </div>
+              </div>
+              <div style="display:flex;gap:12px;margin-top:22px">
+                <button class="btn-estop" id="btnBuzzerPlay" style="height:48px;flex:1;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-blue));color:#030712;box-shadow:0 4px 20px rgba(0,242,254,0.25)" onclick="playBuzzer('CUSTOM')">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg> REPRODUCIR
+                </button>
+                <button class="btn-estop" id="btnBuzzerStop" style="height:48px;flex:1;background:var(--bg-elevated);color:var(--accent-red);border:1px solid var(--accent-red)" onclick="stopBuzzer()">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="5" y="5" width="14" height="14" rx="2"/></svg> DETENER
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Estado del módulo -->
+          <div class="card col-12">
+            <div class="card-header"><div class="card-title"><span class="ct-icon"><svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg></span> Estado del Módulo Buzzer</div></div>
+            <div class="card-body">
+              <div class="sensor-list">
+                <div class="sensor-row" data-sensor="buzzer" id="buzzerStatusRow">
+                  <div class="sensor-row-icon"><svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></div>
+                  <div class="sensor-row-info"><div class="sensor-row-name">Buzzer Pasivo</div><div class="sensor-row-detail">GPIO15 · Sonido vía PWM</div></div>
+                  <div class="sensor-row-status" id="buzzerStatusDot"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ================= SENSORS PANEL ================= -->
       <div id="panel-sensors" class="panel">
         <div class="content-grid">
@@ -3300,6 +3382,103 @@ function toggleSound() {
   if (st) st.textContent = soundEnabled ? 'ON' : 'OFF';
   if (si) si.innerHTML = soundEnabled ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>' : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>';
   if(soundEnabled) playSuccessSound();
+}
+
+// ==================== BUZZER / SOUND MODULE ====================
+const BUZZER_PRESETS = [
+  { key: 'BEEP',   label: 'Beep Corto',  freq: 880,  duration: 3000, wave: 'square', volume: 70, icon: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>' },
+  { key: 'SIREN',  label: 'Sirena',      freq: 600,  duration: 3000, wave: 'sawtooth', volume: 60, icon: '<path d="M6 12a12 12 0 0 1 12-12"/>' },
+  { key: 'ALARM',  label: 'Alarma',      freq: 440,  duration: 3000, wave: 'square', volume: 80, icon: '<path d="M12 9v4m0 4h.01"/><circle cx="12" cy="12" r="9"/>' },
+  { key: 'RISE',   label: 'Ascendente',  freq: 300,  duration: 3000, wave: 'sine', volume: 70, icon: '<polyline points="4 18 9 12 13 15 20 6"/>' },
+  { key: 'FALL',   label: 'Descendente', freq: 1200, duration: 3000, wave: 'triangle', volume: 70, icon: '<polyline points="4 6 9 12 13 9 20 18"/>' },
+];
+
+let buzzerWave = 'sine';
+let buzzerFreq = 880;
+let buzzerDuration = 300;
+let buzzerVolume = 50;
+let _activeBuzzerOsc = null;
+let _activeBuzzerGain = null;
+let _buzzerStopTimer = null;
+
+function initBuzzerUI() {
+  const grid = document.getElementById('buzzerPresetGrid');
+  if (grid) {
+    grid.innerHTML = '';
+    BUZZER_PRESETS.forEach(p => {
+      const btn = document.createElement('button');
+      btn.className = 'mode-card';
+      btn.style.cssText = 'padding:16px;cursor:pointer;display:flex;flex-direction:column;gap:8px;align-items:flex-start';
+      btn.innerHTML = '<div class="mode-card-ico" style="width:34px;height:34px;margin-bottom:0"><svg viewBox="0 0 24 24" style="width:16px;height:16px" fill="none" stroke="currentColor" stroke-width="2">' + p.icon + '</svg></div><h3 style="font-size:13px">' + p.label + '</h3>';
+      btn.onclick = () => playBuzzer(p.key);
+      grid.appendChild(btn);
+    });
+  }
+  // Wave selector
+  const sel = document.getElementById('waveSelector');
+  if (sel) {
+    sel.querySelectorAll('.tool-btn').forEach(b => {
+      b.onclick = () => {
+        sel.querySelectorAll('.tool-btn').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        buzzerWave = b.dataset.wave;
+      };
+    });
+  }
+}
+
+function updateBuzzerFreq(v) { buzzerFreq = parseInt(v); document.getElementById('buzzerFreqVal').textContent = buzzerFreq + ' Hz'; }
+function updateBuzzerDuration(v) { buzzerDuration = parseInt(v); document.getElementById('buzzerDurVal').textContent = buzzerDuration + ' ms'; }
+function updateBuzzerVolume(v) { buzzerVolume = parseInt(v); document.getElementById('buzzerVolVal').textContent = buzzerVolume + '%'; }
+
+function playBuzzer(pattern) {
+  if (emergencyStop) { playAlertSound(); return; }
+  let cfg;
+  const preset = BUZZER_PRESETS.find(p => p.key === pattern);
+  if (preset) {
+    cfg = { pattern: preset.key, freq: preset.freq, duration: preset.duration, wave: preset.wave, volume: preset.volume };
+  } else {
+    cfg = { pattern: 'CUSTOM', freq: buzzerFreq, duration: buzzerDuration, wave: buzzerWave, volume: buzzerVolume };
+  }
+  stopBuzzerLocal();
+  playBuzzerLocal(cfg);
+  sendCmd('buzzer', cfg);
+  showToast('Buzzer: ' + cfg.pattern.toLowerCase() + ' · ' + cfg.freq + ' Hz', 'success');
+}
+
+function stopBuzzer() {
+  stopBuzzerLocal();
+  sendCmd('buzzer_stop');
+  showToast('Buzzer detenido', 'warn');
+}
+
+function playBuzzerLocal(cfg) {
+  if (!soundEnabled || !audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = cfg.wave;
+    osc.frequency.setValueAtTime(cfg.freq, audioCtx.currentTime);
+    const vol = (cfg.volume / 100) * 0.2;
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + cfg.duration / 1000);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + cfg.duration / 1000);
+    _activeBuzzerOsc = osc;
+    _activeBuzzerGain = gain;
+    clearTimeout(_buzzerStopTimer);
+    _buzzerStopTimer = setTimeout(stopBuzzerLocal, cfg.duration);
+  } catch(e) {}
+}
+
+function stopBuzzerLocal() {
+  clearTimeout(_buzzerStopTimer);
+  try { if (_activeBuzzerOsc) _activeBuzzerOsc.stop(); } catch(e) {}
+  try { if (_activeBuzzerGain) _activeBuzzerGain.disconnect(); } catch(e) {}
+  _activeBuzzerOsc = null;
+  _activeBuzzerGain = null;
 }
 
 // ==================== PANEL NAVIGATION ====================
@@ -4305,6 +4484,22 @@ function startStatusPolling() {
         }
       });
       
+      // Estado del módulo Buzzer (reproduciendo/idle)
+      if (d.sensors.buzzer) {
+        const buzzerRow = document.getElementById('buzzerStatusRow');
+        if (buzzerRow) {
+          const playing = d.sensors.buzzer.state === 'playing';
+          buzzerRow.classList.toggle('offline', !d.sensors.buzzer.online);
+          const dot = document.getElementById('buzzerStatusDot');
+          if (dot) {
+            dot.style.background = playing ? 'var(--accent-yellow)' : (d.sensors.buzzer.online ? 'var(--accent-green)' : 'var(--accent-red)');
+            dot.style.boxShadow = '0 0 10px ' + (playing ? 'var(--accent-yellow)' : (d.sensors.buzzer.online ? 'var(--accent-green)' : 'var(--accent-red)'));
+          }
+          const nameEl = buzzerRow.querySelector('.sensor-row-name');
+          if (nameEl) nameEl.textContent = playing ? 'Buzzer Pasivo — Reproduciendo' : 'Buzzer Pasivo';
+        }
+      }
+      
       // ==================== SENSORS PANEL UPDATE ====================
       // Track history for min/max/avg analysis
       if (!window.sensorHistory) window.sensorHistory = {};
@@ -4942,6 +5137,7 @@ function addCommsLog(msg, type) {
 window.addEventListener('DOMContentLoaded', () => {
   renderKeybindsUI();
   initLedMatrixUI();
+  initBuzzerUI();
   startStatusPolling();
   addCommsLog('Sistema de comunicacion iniciado', 'info');
 
