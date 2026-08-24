@@ -43,3 +43,22 @@ POST /api/command
 - `wave` puede ignorarse (el buzzer pasivo solo produce onda cuadrada); usarlo solo para debugging.
 - `volume` → duty cycle (`ledcWrite`), y `duration` → temporizador para apagar el tono.
 - Notificar en `/api/status` → `sensors.buzzer.state` (`playing` / `idle`) y `sensors.buzzer.online`.
+
+## Protocolo Joystick de Rotación (giro sobre el eje propio)
+
+El Control Center PC envía este comando para rotar el robot sobre su propio eje (yaw), sin avance lineal:
+
+```
+POST /api/command
+{"cmd": "rotate", "value": 0.75}
+```
+
+| Campo  | Tipo  | Descripción |
+|--------|-------|-------------|
+| `value`| float | Velocidad de giro relativa en el rango **-1.00 a 1.00**. Negativo = giro antihorario (izquierda), positivo = giro horario (derecha), `0` = detener giro. |
+
+Notas:
+
+- La magnitud es relativa: multiplicar por la velocidad global (`speed`, 0–100 %).
+- Se envía continuamente mientras el joystick está desplazado y un último `{"cmd": "rotate", "value": 0}` al soltar.
+- Sugerencia: en la cinemática, girar sobre el eje = patas del lado izquierdo hacia adelante y las del lado derecho hacia atrás (o viceversa según el signo), manteniendo el centro de masa fijo.

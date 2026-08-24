@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ARAÑA ROBOT - Control Center v2.6 Desktop + ESP32-S3 Bridge
+NEUN - Araña Robótica | Control Center v2.6 Desktop + ESP32-S3 Bridge
 IPET N°66 - Electrónica Digital III
 
 Arquitectura:
@@ -352,6 +352,7 @@ class CommandDispatcher:
         self._handlers: dict[str, callable] = {
             "mode": self._handle_mode,
             "move": self._handle_move,
+            "rotate": self._handle_rotate,
             "aux": self._handle_aux,
             "speed": self._handle_speed,
             "emergency": self._handle_emergency,
@@ -385,6 +386,17 @@ class CommandDispatcher:
 
     def _handle_move(self, value: Any) -> None:
         self._state.log(f"Move: {value}", "info")
+
+    def _handle_rotate(self, value: Any) -> None:
+        try:
+            rate = float(value)
+        except (TypeError, ValueError):
+            return
+        if rate == 0:
+            self._state.log("Giro sobre eje: detenido", "info")
+        else:
+            sentido = "horario" if rate > 0 else "antihorario"
+            self._state.log(f"Giro sobre eje: {sentido} ({rate:+.2f})", "info")
 
     def _handle_aux(self, value: Any) -> None:
         self._state.log(f"Aux: {value}", "info")
@@ -453,8 +465,8 @@ dispatcher = CommandDispatcher(state, esp32)
 # =============================================================================
 
 _CHAT_RESPONSES: dict[str, str] = {
-    "hola": "¡Hola! Soy el asistente de la Araña Robot. ¿En qué puedo ayudarte?",
-    "modo": "Los modos disponibles son: Stand, Caminar, Trotar, Gatear, Girar, Cangrejo, Balanceo, Baile, Centinela y Explorar.",
+    "hola": "¡Hola! Soy el asistente de NEUN, la araña robótica. ¿En qué puedo ayudarte?",
+    "modo": "Los modos disponibles son: Stand, Paso Trípode, Trote Rápido, Gateo Estable, Giro Horario/Antihorario, Cangrejo Lateral, Balanceo, Baile, Centinela, Exploración Autónoma, Espiral, Salto, Saludo, Flexiones, Seguir Objeto y Reposo Profundo.",
     "sensor": "Todos los sensores están online: Radar, IMU, IR, DHT22, NeoPixel y PCA9685.",
     "bateria": None,  # Se resuelve dinámicamente
     "calibrar": "Usa el comando 'calibrate' en la terminal.",
@@ -560,7 +572,7 @@ def api_chat():
 
 if __name__ == "__main__":
     print("=" * 65)
-    print("  ARAÑA ROBOT v2.6 - Control Center Desktop + ESP32 Bridge")
+    print("  NEUN - Araña Robótica | Centro de Control v2.6 + ESP32 Bridge")
     print("=" * 65)
     print(f"  IP del ESP32 configurada: {config.esp32_ip}")
     print("  Para conectar:")
